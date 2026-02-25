@@ -416,13 +416,13 @@ class VideoBot:
         # معالج الأخطاء
         self.dp.add_error_handler(self.error_handler)
     
-    def get_main_keyboard(self) -> ReplyKeyboardMarkup:
+    def get_main_keyboard(self) -> InlineKeyboardMarkup:
         keyboard = [
-            [KeyboardButton("📥 تحميل فيديو")],
-            [KeyboardButton("📊 إحصائياتي"), KeyboardButton("🏆 المتصدرين")],
-            [KeyboardButton("📬 دعم فني"), KeyboardButton("❓ مساعدة")]
+            [InlineKeyboardButton("📥 تحميل فيديو", callback_data="main_download")],
+            [InlineKeyboardButton("📊 إحصائياتي", callback_data="main_stats"), InlineKeyboardButton("🏆 المتصدرين", callback_data="main_top")],
+            [InlineKeyboardButton("📬 دعم فني", callback_data="main_support"), InlineKeyboardButton("❓ مساعدة", callback_data="main_help")]
         ]
-        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        return InlineKeyboardMarkup(keyboard)
     
     # ========== الأوامر العامة ==========
     
@@ -448,7 +448,7 @@ class VideoBot:
 👑 <b>للمشرفين فقط:</b> /admin
         """
         
-        update.message.reply_text(
+        update.effective_message.reply_text(
             welcome,
             parse_mode='HTML',
             reply_markup=self.get_main_keyboard()
@@ -472,7 +472,7 @@ class VideoBot:
 📬 **للاستفسارات:** /support
 📊 **إحصائياتك:** /stats
         """
-        update.message.reply_text(help_text, parse_mode='Markdown')
+        update.effective_message.reply_text(help_text, parse_mode='Markdown')
     
     def stats(self, update: Update, context: CallbackContext):
         user = update.effective_user
@@ -494,13 +494,13 @@ class VideoBot:
         else:
             text = "📊 لا توجد إحصائيات بعد"
         
-        update.message.reply_text(text, parse_mode='HTML')
+        update.effective_message.reply_text(text, parse_mode='HTML')
     
     def top(self, update: Update, context: CallbackContext):
         top_users = self.db.get_top_users(10)
         
         if not top_users:
-            update.message.reply_text("🏆 لا يوجد مستخدمين بعد")
+            update.effective_message.reply_text("🏆 لا يوجد مستخدمين بعد")
             return
         
         text = "🏆 <b>أفضل 10 مستخدمين</b>\n\n"
@@ -513,11 +513,11 @@ class VideoBot:
             text += f"{medal} {name}\n"
             text += f"   📥 {downloads} تحميل\n"
         
-        update.message.reply_text(text, parse_mode='HTML')
+        update.effective_message.reply_text(text, parse_mode='HTML')
     
     def cancel(self, update: Update, context: CallbackContext):
         context.user_data.clear()
-        update.message.reply_text(
+        update.effective_message.reply_text(
             "✅ تم الإلغاء",
             reply_markup=self.get_main_keyboard()
         )
@@ -526,7 +526,7 @@ class VideoBot:
     # ========== نظام الدعم ==========
     
     def support_start(self, update: Update, context: CallbackContext):
-        update.message.reply_text(
+        update.effective_message.reply_text(
             "📬 **الدعم الفني**\n\n"
             "أرسل رسالتك وسيتم إرسالها للمشرف.\n"
             "أرسل /cancel للإلغاء",
@@ -557,7 +557,7 @@ class VideoBot:
             except:
                 pass
             
-            update.message.reply_text(
+            update.effective_message.reply_text(
                 "✅ تم إرسال رسالتك، سيتم الرد عليك قريباً",
                 reply_markup=self.get_main_keyboard()
             )
@@ -569,13 +569,13 @@ class VideoBot:
     
     def admin_reply_command(self, update: Update, context: CallbackContext):
         if update.effective_user.id != ADMIN_ID:
-            update.message.reply_text("⛔ هذا الأمر للمشرف فقط")
+            update.effective_message.reply_text("⛔ هذا الأمر للمشرف فقط")
             return
         
         try:
             args = context.args
             if len(args) < 2:
-                update.message.reply_text("❌ استخدم: /reply <user_id> <الرسالة>")
+                update.effective_message.reply_text("❌ استخدم: /reply <user_id> <الرسالة>")
                 return
             
             user_id = int(args[0])
@@ -587,18 +587,18 @@ class VideoBot:
                 parse_mode='Markdown'
             )
             
-            update.message.reply_text(f"✅ تم إرسال الرد للمستخدم {user_id}")
+            update.effective_message.reply_text(f"✅ تم إرسال الرد للمستخدم {user_id}")
             
         except ValueError:
-            update.message.reply_text("❌ معرف المستخدم غير صحيح")
+            update.effective_message.reply_text("❌ معرف المستخدم غير صحيح")
         except Exception as e:
-            update.message.reply_text(f"❌ فشل الإرسال: {str(e)[:100]}")
+            update.effective_message.reply_text(f"❌ فشل الإرسال: {str(e)[:100]}")
     
     # ========== لوحة تحكم الآدمين ==========
     
     def admin_panel(self, update: Update, context: CallbackContext):
         if update.effective_user.id != ADMIN_ID:
-            update.message.reply_text("⛔ هذا الأمر للمشرف فقط")
+            update.effective_message.reply_text("⛔ هذا الأمر للمشرف فقط")
             return
         
         stats = self.db.get_total_stats()
@@ -624,7 +624,7 @@ class VideoBot:
             [InlineKeyboardButton("❌ إغلاق", callback_data="cancel")]
         ]
         
-        update.message.reply_text(
+        update.effective_message.reply_text(
             text,
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
@@ -639,6 +639,21 @@ class VideoBot:
         
         if data == "cancel":
             query.edit_message_text("✅ تم الإلغاء")
+            return
+            
+        # أزرار القائمة الرئيسية
+        if data.startswith("main_"):
+            action = data.replace("main_", "")
+            if action == "download":
+                query.message.reply_text("📤 أرسل رابط الفيديو الآن")
+            elif action == "stats":
+                self.stats(update, context)
+            elif action == "top":
+                self.top(update, context)
+            elif action == "support":
+                self.support_start(update, context)
+            elif action == "help":
+                self.help(update, context)
             return
         
         # أزرار الآدمين
@@ -815,7 +830,7 @@ class VideoBot:
         
         # أزرار لوحة المفاتيح
         if text == "📥 تحميل فيديو":
-            update.message.reply_text("📤 أرسل رابط الفيديو الآن")
+            update.effective_message.reply_text("📤 أرسل رابط الفيديو الآن")
             return
         elif text == "📊 إحصائياتي":
             self.stats(update, context)
@@ -843,7 +858,7 @@ class VideoBot:
             text = f"{platform_name} ✅ **تم اكتشاف الفيديو**\n\nاختر الجودة:"
             keyboard = self.downloader.get_quality_buttons(url_hash)
             
-            update.message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            update.effective_message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
         else:
             # إذا كان المستخدم في وضع الدعم
             if context.user_data.get('waiting_for_support'):
@@ -852,7 +867,7 @@ class VideoBot:
             elif context.user_data.get('admin_state') == 'broadcast' and update.effective_user.id == ADMIN_ID:
                 self._handle_admin_broadcast(update, context)
             else:
-                update.message.reply_text(
+                update.effective_message.reply_text(
                     "❌ هذا ليس رابط فيديو صحيح\n"
                     "أرسل رابطاً من يوتيوب، انستغرام، تيك توك..."
                 )
@@ -862,7 +877,7 @@ class VideoBot:
         users = self.db.get_all_users()
         sent = 0
         
-        status_msg = update.message.reply_text(f"⏳ جاري الإرسال إلى {len(users)} مستخدم...")
+        status_msg = update.effective_message.reply_text(f"⏳ جاري الإرسال إلى {len(users)} مستخدم...")
         
         for user in users:
             try:
@@ -940,17 +955,22 @@ def run_server():
 def self_ping():
     import urllib.request
     ping_url = os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("PING_URL")
-    if ping_url:
-        print(f"⏳ Setting up self-ping every 5 minutes to keep alive: {ping_url}")
-        while True:
-            time.sleep(5 * 60)
-            try:
-                urllib.request.urlopen(ping_url)
-                print("[Self-Ping] Status: 200")
-            except Exception as e:
-                print(f"[Self-Ping] Error: {e}")
-    else:
-        print("⚠️ No RENDER_EXTERNAL_URL or PING_URL found. Self-ping might not work.")
+    if not ping_url:
+        # Fallback to localhost if no external URL is set, so the HTTP server is at least hit locally
+        port = os.environ.get("PORT", "8080")
+        ping_url = f"http://localhost:{port}/"
+
+    print(f"⏳ Setting up self-ping every 5 minutes to keep alive: {ping_url}")
+    while True:
+        try:
+            # Ping first, then sleep
+            req = urllib.request.Request(ping_url, headers={'User-Agent': 'Mozilla/5.0'})
+            response = urllib.request.urlopen(req, timeout=10)
+            print(f"[Self-Ping] Status: {response.getcode()} at {datetime.now().strftime('%H:%M:%S')}")
+        except Exception as e:
+            print(f"[Self-Ping] Error: {e} at {datetime.now().strftime('%H:%M:%S')}")
+        
+        time.sleep(5 * 60)
 
 if __name__ == "__main__":
     import threading
