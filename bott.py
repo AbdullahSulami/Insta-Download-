@@ -19,10 +19,20 @@ import threading
 from queue import Queue
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import (
-    Updater, CommandHandler, MessageHandler, CallbackQueryHandler,
-    Filters, CallbackContext, ConversationHandler
-)
+try:
+    from telegram.ext import (
+        Updater, CommandHandler, MessageHandler, CallbackQueryHandler,
+        Filters, CallbackContext, ConversationHandler
+    )
+except ImportError:
+    # Handle PTB v20 compatibility
+    from telegram.ext import (
+        Application as Updater, CommandHandler, MessageHandler, CallbackQueryHandler,
+        filters as Filters, CallbackContext, ConversationHandler
+    )
+    # Note: v20 is async, so this is just a name shim. 
+    # But since the user is using v13 style, we should probably stick to v13 or fix the environment.
+
 import yt_dlp
 
 from dotenv import load_dotenv
@@ -294,14 +304,28 @@ class VideoDownloader:
                     # محاولة ثانية بوضعية أقل صرامة وUA مختلف
                     ydl_opts['format'] = 'best'
                     if platform_id == 'instagram':
-                        # تجربة تبديل الرابط لرابط الـ ddinstagram كحل احتياطي داخلي لـ yt-dlp
-                        alt_url = url.replace("instagram.com", "ddinstagram.com")
+                        # تجربة تبديل الرابط لرابط الـ ddinstagram كحل احتياطي
+                        # إزالة www. لأنها تسبب مشاكل DNS مع ddinstagram
+                        alt_url = url.replace("www.instagram.com", "ddinstagram.com").replace("instagram.com", "ddinstagram.com")
+                        logger.info(f"محاولة التحميل عبر رابط بديل: {alt_url}")
                         try:
-                            with yt_dlp.YoutubeDL(ydl_opts) as ydl_alt:
-                                info = ydl_alt.extract_info(alt_url, download=False)
+                            # محاولة الاستخراج أولاً عبر yt-dlp بالرابط البديل
+                            info = ydl.extract_info(alt_url, download=False)
                         except:
-                            # الرجوع للرابط الأصلي وبذل أقصى جهد
-                            info = ydl.extract_info(url, download=False)
+                            # حل أخير: محاولة كشط الرابط المباشر من ddinstagram يدوياً
+                            try:
+                                import requests
+                                response = requests.get(alt_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+                                if response.status_code == 200:
+                                    # البحث عن رابط الفيديو في الصفحة
+                                    video_match = re.search(r'property="og:video" content="([^"]+)"', response.text)
+                                    if video_match:
+                                        direct_link = video_match.group(1)
+                                        logger.info(f"تم العثور على رابط مباشر: {direct_link}")
+                                        info = ydl.extract_info(direct_link, download=False)
+                            except Exception as ex:
+                                logger.error(f"فشلت جميع محاولات انستغرام: {ex}")
+                                raise e
                     else:
                         info = ydl.extract_info(url, download=False)
 
@@ -375,8 +399,20 @@ class VideoBot:
         self.logger = MessageLogger()
         self.downloader = VideoDownloader(VIDEOS_DIR)
         
-        self.updater = Updater(token, use_context=True)
-        self.dp = self.updater.dispatcher
+        if not token:
+            logger.error("❌ TOKEN is missing! Please check your .env file or environment variables.")
+            raise ValueError("TOKEN cannot be None. Make sure 'TOKEN' is set in your environment.")
+            
+        try:
+            self.updater = Updater(token, use_context=True)
+            self.dp = self.updater.dispatcher
+        except Exception as e:
+            logger.error(f"فشل في بدء Updater: {e}")
+            # إذا فشل بسبب PTB v20، نحاول تحذير المستخدم
+            if "unexpected keyword argument 'use_context'" in str(e):
+                logger.error("❌ تم اكتشاف نسخة python-telegram-bot 20+ ولكن الكود مكتوب لنسخة 13.x")
+                raise ImportError("Please install python-telegram-bot==13.15")
+            raise e
         
         self._add_handlers()
         self._setup_commands()
