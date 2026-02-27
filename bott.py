@@ -251,6 +251,7 @@ class VideoDownloader:
         return InlineKeyboardMarkup(buttons)
     
     def download(self, url: str, quality: str) -> tuple:
+        info = None
         qconfig = self.QUALITIES.get(quality, self.QUALITIES["best"])
         platform_id, platform_name = self.detect_platform(url)
         video_id = self.extract_video_id(url, platform_id)
